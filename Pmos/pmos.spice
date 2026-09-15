@@ -1,0 +1,53 @@
+*** nmos analysis ***
+
+.lib "$PDK_ROOT/sky130A/libs.tech/ngspice/sky130.lib.spice" tt
+
+Vds Vds 0 DC 0
+Vgs Vgs 0 DC 0
+Xp1 Vds Vgs 0 0 MY_PFET
+
+*** devices ***
+.subckt MY_PFET Vs Vg Vd Vb W_val=5 L_val=0.30
+    XMP Vd Vg Vs Vb sky130_fd_pr__pfet_01v8 W='W_val' L='L_val' 
++ ad=  {int((nf+1)/2)*w/nf*0.29}
++ as=  {int((nf+2)/2)*w/nf*0.29}
++ pd=  {2*int((nf+1)/2)*(w/nf+0.29)}
++ ps=  {2*int((nf+2)/2)*(w/nf+0.29)}
++ nrd= {0.29/w}
++ nrs= {0.29/w}
++ sa = 0 sb = 0 sd = 0
+.ends MY_PFET
+
+.subckt MY_NFET Vd Vg Vs Vb W_val=5 L_val=0.15
+    XMN Vd Vg Vs Vb sky130_fd_pr__nfet_01v8 W='W_val' L='L_val' 
++ ad=  {int((nf+1)/2)*w/nf*0.29}
++ as=  {int((nf+2)/2)*w/nf*0.29}
++ pd=  {2*int((nf+1)/2)*(w/nf+0.29)}
++ ps=  {2*int((nf+2)/2)*(w/nf+0.29)}
++ nrd= {0.29/w}
++ nrs= {0.29/w}
++ sa = 0 sb = 0 sd = 0
+.ends MY_NFET
+
+.control
+    echo "vds,vgs,id,gm,gm_over_id" > "pmos_analysis.csv"
+    
+    let Vds_val = 0
+    let Vgs_val = 0
+
+    while Vds_val >= -1.8
+        while Vgs_val >= -1.8
+            alter Vds = Vds_val
+            alter Vgs = Vgs_val
+            op
+            let id = Vds#branch
+            let gm = @m.xp1.xmp.msky130_fd_pr__pfet_01v8[gm]
+            let gm_over_id = gm/id
+            echo "$&Vds,$&Vgs,$&id,$&gm,$&gm_over_id" >> "pmos_analysis.csv"
+            let Vgs_val = Vgs_val - 0.05
+        end
+        let Vgs_val = 0
+        let Vds_val = Vds_val - 0.05
+    end
+    quit
+.endc

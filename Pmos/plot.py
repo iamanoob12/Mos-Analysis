@@ -1,3 +1,4 @@
+import argparse
 import csv
 from pathlib import Path
 
@@ -43,15 +44,50 @@ def load_analysis(path):
 	return vds_values, vgs_values, grids
 
 
-def plot_analysis(path=DATA_FILE):
+def show_or_save(figure, path, filename):
+	if interactive_backend:
+		plt.show()
+	else:
+		output_path = path.with_name(filename)
+		figure.savefig(output_path, dpi=150)
+		print(f"Saved plot to {output_path}")
+
+
+def plot_analysis(path=DATA_FILE, requested_vgs=None):
 	vds, vgs, grids = load_analysis(path)
-	vds_grid, vgs_grid = np.meshgrid(vds, vgs)
 
 	# gm/id is undefined where the drain current is effectively zero.
 	current_scale = np.nanmax(np.abs(grids["id"]))
 	invalid_ratio = np.abs(grids["id"]) <= max(current_scale * 1e-12, 1e-30)
 	gm_over_id = grids["gm_over_id"].copy()
 	gm_over_id[invalid_ratio] = np.nan
+
+	if requested_vgs is not None:
+		matching_vgs = vgs[np.isclose(vgs, requested_vgs, rtol=0, atol=1e-9)]
+		if matching_vgs.size == 0:
+			raise ValueError(
+				f"VGS={requested_vgs:g} V is not in the data. "
+				f"Choose one of the swept values from {vgs[0]:g} to {vgs[-1]:g} V."
+			)
+
+		vgs_value = matching_vgs[0]
+		vgs_index = np.flatnonzero(np.isclose(vgs, vgs_value))[0]
+		plots = (
+			(grids["id"][vgs_index], "$I_D$ (A)", "tab:blue"),
+			(grids["gm"][vgs_index], "$g_m$ (S)", "tab:orange"),
+			(gm_over_id[vgs_index], "$g_m/I_D$ (1/V)", "tab:green"),
+		)
+		figure, axes = plt.subplots(1, 3, figsize=(18, 5), constrained_layout=True)
+		for axis, (values, y_label, color) in zip(axes, plots):
+			axis.plot(vds, values, color=color, linewidth=2)
+			axis.set_xlabel("$V_{DS}$ (V)")
+			axis.set_ylabel(y_label)
+			axis.set_title(f"{y_label} at $V_{{GS}}={vgs_value:g}$ V")
+			axis.grid(True, alpha=0.3)
+		show_or_save(figure, path, f"pmos_cuts_vgs_{vgs_value:g}.png")
+		return
+
+	vds_grid, vgs_grid = np.meshgrid(vds, vgs)
 
 	plots = (
 		("id", "$I_D$ (A)", "viridis"),
@@ -76,13 +112,15 @@ def plot_analysis(path=DATA_FILE):
 		axis.set_title(z_label)
 		figure.colorbar(surface, ax=axis, shrink=0.7, pad=0.1)
 
-	if interactive_backend:
-		plt.show()
-	else:
-		output_path = path.with_name("pmos_analysis_3d.png")
-		figure.savefig(output_path, dpi=150)
-		print(f"Saved plot to {output_path}")
+	show_or_save(figure, path, "pmos_analysis_3d.png")
 
 
 if __name__ == "__main__":
-	plot_analysis()
+	parser = argparse.ArgumentParser(description="Plot PMOS analysis data.")
+	parser.add_argument(
+		"--vgs",
+		type=float,
+		help="show ID, gm, and gm/ID cuts at this swept VGS value",
+	)
+	args = parser.parse_args()
+	plot_analysis(requested_vgs=args.vgs)

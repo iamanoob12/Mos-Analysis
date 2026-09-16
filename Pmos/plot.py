@@ -28,7 +28,7 @@ def load_analysis(path):
 	vgs_values = np.array(sorted({float(row["vgs"]) for row in rows}))
 	grids = {
 		name: np.full((vgs_values.size, vds_values.size), np.nan)
-		for name in ("id", "gm", "gm_over_id")
+		for name in ("id", "gm", "gm_over_id", "gm_r0")
 	}
 	vds_index = {value: index for index, value in enumerate(vds_values)}
 	vgs_index = {value: index for index, value in enumerate(vgs_values)}
@@ -53,8 +53,27 @@ def show_or_save(figure, path, filename):
 		print(f"Saved plot to {output_path}")
 
 
-def plot_analysis(path=DATA_FILE, requested_vgs=None):
+METRICS = {
+	"id": ("$I_D$ (A)", "viridis"),
+	"gm": ("$g_m$ (S)", "plasma"),
+	"gm_over_id": ("$g_m/I_D$ (1/V)", "cividis"),
+	"gm_r0": ("$g_m r_o$", "magma"),
+}
+
+
+def matching_value(values, requested, name):
+	matching = values[np.isclose(values, requested, rtol=0, atol=1e-9)]
+	if matching.size == 0:
+		raise ValueError(
+			f"{name}={requested:g} V is not in the data. "
+			f"Choose one of the swept values from {values[0]:g} to {values[-1]:g} V."
+		)
+	return matching[0]
+
+
+def plot_analysis(path=DATA_FILE, metric_names=None, requested_vds=None, requested_vgs=None):
 	vds, vgs, grids = load_analysis(path)
+	metric_names = metric_names or list(METRICS)
 
 	# gm/id is undefined where the drain current is effectively zero.
 	current_scale = np.nanmax(np.abs(grids["id"]))
@@ -62,42 +81,48 @@ def plot_analysis(path=DATA_FILE, requested_vgs=None):
 	gm_over_id = grids["gm_over_id"].copy()
 	gm_over_id[invalid_ratio] = np.nan
 
-	if requested_vgs is not None:
-		matching_vgs = vgs[np.isclose(vgs, requested_vgs, rtol=0, atol=1e-9)]
-		if matching_vgs.size == 0:
-			raise ValueError(
-				f"VGS={requested_vgs:g} V is not in the data. "
-				f"Choose one of the swept values from {vgs[0]:g} to {vgs[-1]:g} V."
-			)
-
-		vgs_value = matching_vgs[0]
+	if requested_vds is not None and requested_vgs is not None:
+		vds_value = matching_value(vds, requested_vds, "VDS")
+		vgs_value = matching_value(vgs, requested_vgs, "VGS")
+		vds_index = np.flatnonzero(np.isclose(vds, vds_value))[0]
 		vgs_index = np.flatnonzero(np.isclose(vgs, vgs_value))[0]
-		plots = (
-			(grids["id"][vgs_index], "$I_D$ (A)", "tab:blue"),
-			(grids["gm"][vgs_index], "$g_m$ (S)", "tab:orange"),
-			(gm_over_id[vgs_index], "$g_m/I_D$ (1/V)", "tab:green"),
+		print(
+			f"\033[1;36mOperating point:\033[0m "
+			f"\033[33mVDS={vds_value:g} V\033[0m, "
+			f"\033[35mVGS={vgs_value:g} V\033[0m"
 		)
-		figure, axes = plt.subplots(1, 3, figsize=(18, 5), constrained_layout=True)
-		for axis, (values, y_label, color) in zip(axes, plots):
-			axis.plot(vds, values, color=color, linewidth=2)
-			axis.set_xlabel("$V_{DS}$ (V)")
-			axis.set_ylabel(y_label)
-			axis.set_title(f"{y_label} at $V_{{GS}}={vgs_value:g}$ V")
+		for name in METRICS:
+			value = gm_over_id[vgs_index, vds_index] if name == "gm_over_id" else grids[name][vgs_index, vds_index]
+			print(f"{name}={value:g}")
+		return
+
+	if requested_vds is not None or requested_vgs is not None:
+		figure, axes = plt.subplots(1, len(metric_names), figsize=(6 * len(metric_names), 5), squeeze=False, constrained_layout=True)
+		axes = axes[0]
+		if requested_vgs is not None:
+			vgs_value = matching_value(vgs, requested_vgs, "VGS")
+			index = np.flatnonzero(np.isclose(vgs, vgs_value))[0]
+			x_values, x_label, suffix = vds, "$V_{DS}$ (V)", f"vgs_{vgs_value:g}"
+			values_for = lambda name: (gm_over_id if name == "gm_over_id" else grids[name])[index]
+		else:
+			vds_value = matching_value(vds, requested_vds, "VDS")
+			index = np.flatnonzero(np.isclose(vds, vds_value))[0]
+			x_values, x_label, suffix = vgs, "$V_{GS}$ (V)", f"vds_{vds_value:g}"
+			values_for = lambda name: (gm_over_id if name == "gm_over_id" else grids[name])[:, index]
+		for axis, name in zip(axes, metric_names):
+			label, _ = METRICS[name]
+			axis.plot(x_values, values_for(name), linewidth=2)
+			axis.set(xlabel=x_label, ylabel=label, title=label)
 			axis.grid(True, alpha=0.3)
-		show_or_save(figure, path, f"pmos_cuts_vgs_{vgs_value:g}.png")
+		show_or_save(figure, path, f"pmos_plane_{suffix}.png")
 		return
 
 	vds_grid, vgs_grid = np.meshgrid(vds, vgs)
+	figure = plt.figure(figsize=(6 * len(metric_names), 5), constrained_layout=True)
 
-	plots = (
-		("id", "$I_D$ (A)", "viridis"),
-		("gm", "$g_m$ (S)", "plasma"),
-		("gm_over_id", "$g_m/I_D$ (1/V)", "cividis"),
-	)
-	figure = plt.figure(figsize=(18, 5), constrained_layout=True)
-
-	for plot_number, (name, z_label, color_map) in enumerate(plots, start=1):
-		axis = figure.add_subplot(1, 3, plot_number, projection="3d")
+	for plot_number, name in enumerate(metric_names, start=1):
+		z_label, color_map = METRICS[name]
+		axis = figure.add_subplot(1, len(metric_names), plot_number, projection="3d")
 		values = gm_over_id if name == "gm_over_id" else grids[name]
 		surface = axis.plot_surface(
 			vds_grid,
@@ -116,11 +141,24 @@ def plot_analysis(path=DATA_FILE, requested_vgs=None):
 
 
 if __name__ == "__main__":
-	parser = argparse.ArgumentParser(description="Plot PMOS analysis data.")
-	parser.add_argument(
-		"--vgs",
-		type=float,
-		help="show ID, gm, and gm/ID cuts at this swept VGS value",
+	parser = argparse.ArgumentParser(
+		description="Plot PMOS analysis data.",
+		usage="%(prog)s [--id | --gm | --gm_over_id | --gm_r0] [--vgs VGS] [--vds VDS]",
+		formatter_class=argparse.RawDescriptionHelpFormatter,
+		epilog=(
+			"\033[1;36mTwo-bias query:\033[0m "
+			"\033[33m--vds VDS\033[0m \033[35m--vgs VGS\033[0m"
+		),
 	)
+	metric_group = parser.add_mutually_exclusive_group()
+	for name in METRICS:
+		metric_group.add_argument(f"--{name}", action="store_true", help=f"plot {name}")
+	parser.add_argument("--vds", type=float, metavar="VDS", help="select a swept VDS value")
+	parser.add_argument("--vgs", type=float, metavar="VGS", help="select a swept VGS value")
 	args = parser.parse_args()
-	plot_analysis(requested_vgs=args.vgs)
+	selected_metric = next((name for name in METRICS if getattr(args, name)), None)
+	plot_analysis(
+		metric_names=[selected_metric] if selected_metric else None,
+		requested_vds=args.vds,
+		requested_vgs=args.vgs,
+	)

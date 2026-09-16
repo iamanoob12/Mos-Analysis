@@ -30,7 +30,7 @@ Xn1 Vds Vgs 0 0 MY_NFET
 .ends MY_NFET
 
 .control
-    echo "vds,vgs,id,gm,gm_over_id" > "nmos_analysis.csv"
+    echo "vds,vgs,id,gm,gm_over_id,gm_r0" > "nmos_analysis.csv"
     
     let Vds_val = 0
     let Vgs_val = 0
@@ -42,8 +42,10 @@ Xn1 Vds Vgs 0 0 MY_NFET
             op
             let id = -Vds#branch
             let gm = @m.xn1.xmn.msky130_fd_pr__nfet_01v8[gm]
+            let gds = @m.xn1.xmn.msky130_fd_pr__nfet_01v8[gds]
             let gm_over_id = gm/id
-            echo "$&Vds,$&Vgs,$&id,$&gm,$&gm_over_id" >> "nmos_analysis.csv"
+            let gm_r0 = gm * (1/gds)
+            echo "$&Vds,$&Vgs,$&id,$&gm,$&gm_over_id,$&gm_r0" >> "nmos_analysis.csv"
             let Vgs_val = Vgs_val + 0.05
         end
         let Vgs_val = 0

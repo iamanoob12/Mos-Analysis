@@ -5,6 +5,7 @@ This project sweeps $V_{DS}$ and $V_{GS}$ for SKY130 NMOS and PMOS devices, then
 - $I_D(V_{DS}, V_{GS})$
 - $g_m(V_{DS}, V_{GS})$
 - $g_m/I_D(V_{DS}, V_{GS})$
+- $g_m r_o(V_{DS}, V_{GS})$
 
 ## Requirements
 
@@ -61,9 +62,22 @@ If `tkinter` is unavailable, the scripts use a non-interactive backend and save:
 - `Nmos/nmos_analysis_3d.png`
 - `Pmos/pmos_analysis_3d.png`
 
-## Plot a VGS Cut
+## Select a Metric
 
-Use `--vgs` to view $I_D$, $g_m$, and $g_m/I_D$ versus $V_{DS}$ at one exact swept gate voltage:
+Use one metric flag to plot only that metric. Without a metric flag, all four
+metrics are plotted:
+
+```bash
+python plot.py --id
+python plot.py --gm
+python plot.py --gm_over_id
+python plot.py --gm_r0
+```
+
+## Plot a Bias Plane
+
+Use `--vgs` to view the selected metrics versus $V_{DS}$ at one exact swept
+gate voltage:
 
 ```bash
 cd ./Nmos
@@ -73,4 +87,32 @@ cd ./Pmos
 python plot.py --vgs -1.0
 ```
 
-The requested value must be one of the simulated `VGS` values, in `0.05 V` increments.
+Use `--vds` to view the selected metrics versus $V_{GS}$ at one exact swept
+drain voltage:
+
+```bash
+cd ./Nmos
+python plot.py --vds 1.0
+
+cd ./Pmos
+python plot.py --vds -1.0
+```
+
+The requested value must be one of the simulated bias values, in `0.05 V`
+increments.
+
+## Query an Operating Point
+
+Provide both `--vds` and `--vgs` to print $I_D$, $g_m$, $g_m/I_D$, and
+$g_m r_o$ for one simulated operating point:
+
+```bash
+cd ./Nmos
+python plot.py --vds 0.5 --vgs 0.5
+
+cd ../Pmos
+python plot.py --vds -0.5 --vgs -0.5
+```
+
+The output includes a colored operating-point line followed by the four
+metric values. Use `python plot.py --help` to see all available options.

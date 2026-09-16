@@ -30,7 +30,7 @@ Xp1 Vds Vgs 0 0 MY_PFET
 .ends MY_NFET
 
 .control
-    echo "vds,vgs,id,gm,gm_over_id" > "pmos_analysis.csv"
+    echo "vds,vgs,id,gm,gm_over_id,gm_r0" > "pmos_analysis.csv"
     
     let Vds_val = 0
     let Vgs_val = 0
@@ -42,8 +42,10 @@ Xp1 Vds Vgs 0 0 MY_PFET
             op
             let id = Vds#branch
             let gm = @m.xp1.xmp.msky130_fd_pr__pfet_01v8[gm]
+            let gds = @m.xp1.xmp.msky130_fd_pr__pfet_01v8[gds]
             let gm_over_id = gm/id
-            echo "$&Vds,$&Vgs,$&id,$&gm,$&gm_over_id" >> "pmos_analysis.csv"
+            let gm_r0 = gm * (1/gds)
+            echo "$&Vds,$&Vgs,$&id,$&gm,$&gm_over_id,$&gm_r0" >> "pmos_analysis.csv"
             let Vgs_val = Vgs_val - 0.05
         end
         let Vgs_val = 0

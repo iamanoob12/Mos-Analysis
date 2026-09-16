@@ -50,10 +50,10 @@ The simulations write `nmos_analysis.csv` and `pmos_analysis.csv`. Both sweeps u
 With no arguments, each script opens three 3D surfaces for $I_D$, $g_m$, and $g_m/I_D$:
 
 ```bash
-cd Nmos
+cd ./Nmos
 python plot.py
 
-cd ../Pmos
+cd ./Pmos
 python plot.py
 ```
 

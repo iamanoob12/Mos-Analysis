@@ -46,10 +46,10 @@ Xn1 Vds Vgs 0 0 MY_NFET
             let gm_over_id = gm/id
             let gm_r0 = gm * (1/gds)
             echo "$&Vds,$&Vgs,$&id,$&gm,$&gm_over_id,$&gm_r0" >> "nmos_analysis.csv"
-            let Vgs_val = Vgs_val + 0.05
+            let Vgs_val = Vgs_val + 0.01
         end
         let Vgs_val = 0
-        let Vds_val = Vds_val + 0.05
+        let Vds_val = Vds_val + 0.01
     end
     quit
 .endc
